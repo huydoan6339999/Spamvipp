@@ -4,10 +4,10 @@ import tempfile
 import subprocess
 from keep_alive import keep_alive
 
-TOKEN = "8025225779:AAHjpXQ9OZ3aoiv1pQn_tFQHezKDtza0Rgo"
+TOKEN = "6320148381:AAFLQR9nXiu-o-RFf8YsEbpsHkVsbN27Ohg"
 bot = telebot.TeleBot(TOKEN)
 
-name_bot = "SpamVip"
+name_bot = "Bảo Huy"
 
 @bot.message_handler(commands=['spam'])
 def spam(message):

@@ -1,2 +1,7 @@
-pyTelegramBotAPI
+pyTelegramBotAPI 
 Flask
+python-telegram-bot
+requests
+pyrogram
+tgcrypto
+requests

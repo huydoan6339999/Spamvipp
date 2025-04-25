@@ -1,147 +1,125 @@
 import logging
-from telegram import Update
-from telegram.ext import Application, CommandHandler, ContextTypes
 import asyncio
 import aiohttp
-from keep_alive import keep_alive  # Import keep_alive
+from telegram import Update
+from telegram.ext import (
+    ApplicationBuilder, CommandHandler, ContextTypes
+)
+from keep_alive import keep_alive
 
 # ========== CẤU HÌNH ==========
-BOT_TOKEN = "6320148381:AAEzg2-xF4SR0bU4J0rDmdkHAzLTg0CiKZ8"  # <-- Thay bằng bot token của bạn
-ADMINS = [5736655322]               # <-- Thay bằng Telegram user ID của admin
-AUTHORIZED_USERS = []              # Danh sách người dùng được phép treo (chỉ admin có thể thêm vào)
-MAX_TREO = 10                      # Giới hạn tối đa username được treo cùng lúc
-API_TIMEOUT = 30                   # Thời gian timeout API (10 giây)
+BOT_TOKEN = "6320148381:AAEzg2-xF4SR0bU4J0rDmdkHAzLTg0CiKZ8"  # <-- Thay bằng token của bạn
+ADMINS = [5736655322]               # <-- Thay bằng Telegram ID của bạn
+AUTHORIZED_USERS = []              # Những user được phép treo
+MAX_TREO = 10                      # Số lượng username có thể treo cùng lúc
+API_TIMEOUT = 10                  # Timeout khi gọi API
 # ==============================
 
 treo_tasks = {}
 
-# Hàm gọi API mỗi 15 phút với timeout
-async def check_loop(username, chat_id, app: Application):
+# /start
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "Chào bạn!\n"
+        "/treo <username> - Treo TikTok\n"
+        "/huytreo <username> - Hủy treo\n"
+        "/adduser <user_id> - Thêm người dùng\n"
+        "/removeuser <user_id> - Xóa người dùng\n"
+        "/list - Danh sách đang treo"
+    )
+
+# Treo API mỗi 15p
+async def check_loop(username, chat_id, app):
     while True:
         url = f"http://ngocan.infinityfreeapp.com/ntik.php?username={username}&key=ngocanvip"
-        
         try:
-            # Cấu hình timeout cho API
             timeout = aiohttp.ClientTimeout(total=API_TIMEOUT)
-            
-            # Gửi yêu cầu API với timeout
             async with aiohttp.ClientSession(timeout=timeout) as session:
                 async with session.get(url) as resp:
                     text = await resp.text()
-            
-            # Gửi kết quả cho người dùng
-            await app.bot.send_message(chat_id=chat_id, text=f"Kết quả cho `{username}`:\n{text}", parse_mode="Markdown")
+            await app.bot.send_message(chat_id, f"Kết quả `{username}`:\n{text}", parse_mode="Markdown")
         except asyncio.TimeoutError:
-            await app.bot.send_message(chat_id=chat_id, text=f"⏰ Lỗi: API mất quá nhiều thời gian để phản hồi khi kiểm tra `{username}`.")
+            await app.bot.send_message(chat_id, f"⏰ API quá lâu khi kiểm tra `{username}`")
         except Exception as e:
-            await app.bot.send_message(chat_id=chat_id, text=f"Lỗi khi kiểm tra `{username}`:\n{e}")
-        
-        # Chờ 15 phút (900 giây) trước khi kiểm tra lại
-        await asyncio.sleep(900)  # 15 phút
+            await app.bot.send_message(chat_id, f"Lỗi: {e}")
+        await asyncio.sleep(900)
 
-# Lệnh /start
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_name = update.effective_user.first_name
-    welcome_message = (
-        f"Chào {user_name}, chào mừng bạn đến với Bot TikTok.\n"
-        "Bot này giúp bạn kiểm tra tài khoản TikTok mỗi 15 phút.\n\n"
-        "Các lệnh có sẵn:\n"
-        "/treo <username> - Bắt đầu treo tài khoản TikTok\n"
-        "/huytreo <username> - Hủy treo tài khoản TikTok\n"
-        "/adduser <user_id> - Thêm người dùng vào danh sách được phép treo (Admin)\n"
-        "/removeuser <user_id> - Xóa người dùng khỏi danh sách (Admin)\n"
-        "/list - Xem danh sách các tài khoản đang treo\n"
-        "/start - Hiển thị thông tin hướng dẫn sử dụng bot"
-    )
-    await update.message.reply_text(welcome_message)
-
-# Lệnh /treo
+# /treo
 async def treo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id not in AUTHORIZED_USERS and update.effective_user.id not in ADMINS:
+    user_id = update.effective_user.id
+    if user_id not in ADMINS and user_id not in AUTHORIZED_USERS:
         return await update.message.reply_text("Bạn không có quyền dùng lệnh này.")
-
     if len(context.args) == 0:
-        return await update.message.reply_text("Vui lòng nhập username TikTok.\nVí dụ: /treo baohuydz158")
-
-    if len(treo_tasks) >= MAX_TREO:
-        return await update.message.reply_text(f"Đã đạt giới hạn {MAX_TREO} username đang treo. Hãy hủy treo một username trước.")
-
+        return await update.message.reply_text("Nhập username: /treo baohuydz158")
     username = context.args[0]
     if username in treo_tasks:
-        return await update.message.reply_text("Username này đã được treo.")
-
+        return await update.message.reply_text("Username đã được treo.")
+    if len(treo_tasks) >= MAX_TREO:
+        return await update.message.reply_text("Đạt giới hạn username đang treo.")
     task = asyncio.create_task(check_loop(username, update.effective_chat.id, context.application))
     treo_tasks[username] = task
-    await update.message.reply_text(f"✅ Đã bắt đầu treo `{username}` mỗi 15 phút.", parse_mode="Markdown")
+    await update.message.reply_text(f"Đã bắt đầu treo `{username}`", parse_mode="Markdown")
 
-# Lệnh /huytreo
+# /huytreo
 async def huytreo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id not in ADMINS:
-        return await update.message.reply_text("Bạn không có quyền dùng lệnh này.")
-
+        return await update.message.reply_text("Bạn không có quyền.")
     if len(context.args) == 0:
-        return await update.message.reply_text("Vui lòng nhập username để hủy treo.\nVí dụ: /huytreo baohuydz158")
-
+        return await update.message.reply_text("Nhập username: /huytreo baohuydz158")
     username = context.args[0]
     task = treo_tasks.get(username)
     if task:
         task.cancel()
         del treo_tasks[username]
-        await update.message.reply_text(f"❌ Đã hủy treo `{username}`.", parse_mode="Markdown")
+        await update.message.reply_text(f"Đã hủy treo `{username}`", parse_mode="Markdown")
     else:
-        await update.message.reply_text("Username này không nằm trong danh sách đang treo.")
+        await update.message.reply_text("Username không được treo.")
 
-# Lệnh /adduser
+# /adduser
 async def adduser(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id not in ADMINS:
-        return await update.message.reply_text("Bạn không có quyền dùng lệnh này.")
-
+        return await update.message.reply_text("Bạn không có quyền.")
     if len(context.args) == 0:
-        return await update.message.reply_text("Vui lòng nhập Telegram ID của user cần thêm.\nVí dụ: /adduser 987654321")
+        return await update.message.reply_text("Nhập user ID: /adduser 123456")
+    try:
+        uid = int(context.args[0])
+        if uid in AUTHORIZED_USERS:
+            return await update.message.reply_text("User đã có quyền.")
+        AUTHORIZED_USERS.append(uid)
+        await update.message.reply_text(f"Đã thêm user ID {uid}")
+    except:
+        await update.message.reply_text("Sai định dạng user ID.")
 
-    user_id = int(context.args[0])
-
-    if user_id in AUTHORIZED_USERS:
-        return await update.message.reply_text(f"User ID {user_id} đã có quyền treo rồi.")
-
-    AUTHORIZED_USERS.append(user_id)
-    await update.message.reply_text(f"✅ Đã thêm user ID {user_id} vào danh sách được phép treo.")
-
-# Lệnh /removeuser
+# /removeuser
 async def removeuser(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id not in ADMINS:
-        return await update.message.reply_text("Bạn không có quyền dùng lệnh này.")
-
+        return await update.message.reply_text("Bạn không có quyền.")
     if len(context.args) == 0:
-        return await update.message.reply_text("Vui lòng nhập Telegram ID của user cần xóa.\nVí dụ: /removeuser 987654321")
+        return await update.message.reply_text("Nhập user ID: /removeuser 123456")
+    try:
+        uid = int(context.args[0])
+        if uid not in AUTHORIZED_USERS:
+            return await update.message.reply_text("User không có trong danh sách.")
+        AUTHORIZED_USERS.remove(uid)
+        await update.message.reply_text(f"Đã xóa user ID {uid}")
+    except:
+        await update.message.reply_text("Sai định dạng user ID.")
 
-    user_id = int(context.args[0])
-
-    if user_id not in AUTHORIZED_USERS:
-        return await update.message.reply_text(f"User ID {user_id} không có quyền treo.")
-
-    AUTHORIZED_USERS.remove(user_id)
-    await update.message.reply_text(f"✅ Đã xóa user ID {user_id} khỏi danh sách được phép treo.")
-
-# Lệnh /list
+# /list
 async def list_treo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id not in ADMINS:
-        return await update.message.reply_text("Bạn không có quyền dùng lệnh này.")
-
+        return await update.message.reply_text("Bạn không có quyền.")
     if not treo_tasks:
-        return await update.message.reply_text("Không có username nào đang được treo.")
-    
-    danh_sach = '\n'.join(f"- `{u}`" for u in treo_tasks.keys())
-    await update.message.reply_text(f"Username đang treo:\n{danh_sach}", parse_mode="Markdown")
+        return await update.message.reply_text("Không có username nào đang treo.")
+    danh_sach = "\n".join(f"- {u}" for u in treo_tasks.keys())
+    await update.message.reply_text(f"Đang treo:\n{danh_sach}")
 
-# Khởi động bot và server Flask
+# Khởi chạy bot
 async def main():
-    keep_alive()  # Giữ bot luôn hoạt động
+    keep_alive()
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
 
-    app = Application.builder().token(BOT_TOKEN).build()
-
-    # Thêm các handler cho các lệnh bot
-    app.add_handler(CommandHandler("start", start))  # Thêm handler cho lệnh /start
+    app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("treo", treo))
     app.add_handler(CommandHandler("huytreo", huytreo))
     app.add_handler(CommandHandler("adduser", adduser))

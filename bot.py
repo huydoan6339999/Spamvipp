@@ -6,7 +6,7 @@ import aiohttp
 from keep_alive import keep_alive  # Import keep_alive
 
 # ========== CẤU HÌNH ==========
-BOT_TOKEN = "6320148381:AAEntoWHszOtVaRTBiPmxYNDyELNqxm-8Ag"  # <-- Thay bằng bot token của bạn
+BOT_TOKEN = "6320148381:AAEzg2-xF4SR0bU4J0rDmdkHAzLTg0CiKZ8"  # <-- Thay bằng bot token của bạn
 ADMINS = [5736655322]               # <-- Thay bằng Telegram user ID của admin
 AUTHORIZED_USERS = []              # Danh sách người dùng được phép treo (chỉ admin có thể thêm vào)
 MAX_TREO = 10                      # Giới hạn tối đa username được treo cùng lúc

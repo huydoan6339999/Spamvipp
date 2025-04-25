@@ -9,7 +9,7 @@ from keep_alive import keep_alive  # Import keep_alive
 BOT_TOKEN = "6320148381:AAEntoWHszOtVaRTBiPmxYNDyELNqxm-8Ag"  # <-- Thay bằng bot token của bạn
 ADMINS = [5736655322]               # <-- Thay bằng Telegram user ID của admin
 AUTHORIZED_USERS = []              # Danh sách người dùng được phép treo (chỉ admin có thể thêm vào)
-MAX_TREO = 5                      # Giới hạn tối đa username được treo cùng lúc
+MAX_TREO = 10                      # Giới hạn tối đa username được treo cùng lúc
 API_TIMEOUT = 30                   # Thời gian timeout API (10 giây)
 # ==============================
 
@@ -38,6 +38,22 @@ async def check_loop(username, chat_id, app: Application):
         
         # Chờ 15 phút (900 giây) trước khi kiểm tra lại
         await asyncio.sleep(900)  # 15 phút
+
+# Lệnh /start
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_name = update.effective_user.first_name
+    welcome_message = (
+        f"Chào {user_name}, chào mừng bạn đến với Bot TikTok.\n"
+        "Bot này giúp bạn kiểm tra tài khoản TikTok mỗi 15 phút.\n\n"
+        "Các lệnh có sẵn:\n"
+        "/treo <username> - Bắt đầu treo tài khoản TikTok\n"
+        "/huytreo <username> - Hủy treo tài khoản TikTok\n"
+        "/adduser <user_id> - Thêm người dùng vào danh sách được phép treo (Admin)\n"
+        "/removeuser <user_id> - Xóa người dùng khỏi danh sách (Admin)\n"
+        "/list - Xem danh sách các tài khoản đang treo\n"
+        "/start - Hiển thị thông tin hướng dẫn sử dụng bot"
+    )
+    await update.message.reply_text(welcome_message)
 
 # Lệnh /treo
 async def treo(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -124,6 +140,8 @@ async def main():
 
     app = Application.builder().token(BOT_TOKEN).build()
 
+    # Thêm các handler cho các lệnh bot
+    app.add_handler(CommandHandler("start", start))  # Thêm handler cho lệnh /start
     app.add_handler(CommandHandler("treo", treo))
     app.add_handler(CommandHandler("huytreo", huytreo))
     app.add_handler(CommandHandler("adduser", adduser))

@@ -6,3 +6,4 @@ pyrogram
 tgcrypto
 requests
 apscheduler
+aiohttp

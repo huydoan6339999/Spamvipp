@@ -53,12 +53,12 @@ async def treovip(update: Update, context: ContextTypes.DEFAULT_TYPE):
     url = f"http://ngocan.infinityfreeapp.com/ntik.php?username={username}&key=ngocanvip"
 
     try:
-        response = requests.get(url, timeout=30)
+        response = requests.get(url, timeout=100)
         if response.status_code == 200:
             # Parse JSON data
             data = response.json()
 
-            # Send success message with additional data
+            # Gửi thông báo thành công với dữ liệu chi tiết mà không hiển thị thông tin về API
             await update.message.reply_text(
                 f"✅ Tự động buff cho `@{username}` thành công!\n"
                 f"➕ Thêm: {data.get('followers_add', 0)}\n"

@@ -7,3 +7,4 @@ tgcrypto
 requests
 apscheduler
 aiohttp
+dotenv

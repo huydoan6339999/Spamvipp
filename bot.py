@@ -1,120 +1,107 @@
-from keep_alive import keep_alive
-import telebot
+from telegram import Update
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 import requests
 import time
-import threading
-from functools import wraps
+from keep_alive import keep_alive  # Thêm dòng này để gọi keep_alive.py
 
-# Giữ bot online
-keep_alive()
+# Thay token bot của bạn ở đây
+BOT_TOKEN = "6320148381:AAFDPsDIHpWUfCKWy6kOnpXwm7KztJoZjjs"
 
-# Token bot Telegram
-TOKEN = "6374595640:AAHZm45pZN6QFx2UAdj4CcfA1KZ2ZC09Y7c"
-bot = telebot.TeleBot(TOKEN)
+# ID người dùng của bạn (sử dụng /start để lấy user_id)
+ALLOWED_USER_ID = 5736655322  # Thay bằng user_id của bạn
 
-# ID nhóm và ID admin
-GROUP_ID = -1002221629819
-ADMIN_ID = 5736655322  # Thay bằng Telegram user_id của bạn
+# Dictionary lưu thời gian, số lần sử dụng lệnh và danh sách người dùng có quyền
+cooldowns = {}
+usage_count = {}
+authorized_users = {ALLOWED_USER_ID}  # Khởi tạo với người dùng của bạn là người duy nhất có quyền
 
-# Cooldown và số lần sử dụng dictionary
-user_cooldowns = {}
-user_usage_count = {}  # Đếm số lần thực hiện lệnh
-MAX_USAGE_COUNT = 10  # Giới hạn 10 lần
+# Giới hạn số lần sử dụng lệnh
+MAX_USAGE = 5
 
-# Hàm kiểm tra cooldown
-def is_on_cooldown(user_id, command):
-    now = time.time()
-    key = f"{user_id}_{command}"
-    if key in user_cooldowns:
-        if now - user_cooldowns[key] < 30:  # Cooldown 30 giây
-            return True
-    user_cooldowns[key] = now
-    return False
+# Hàm xử lý lệnh /treovip
+async def treovip(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.message.from_user.id
 
-# Hàm kiểm tra giới hạn số lần sử dụng lệnh
-def check_usage_limit(user_id, command):
-    if user_id not in user_usage_count:
-        user_usage_count[user_id] = 0
-    if user_usage_count[user_id] >= MAX_USAGE_COUNT:
-        return False  # Đã vượt quá số lần sử dụng
-    user_usage_count[user_id] += 1
-    return True
+    # Kiểm tra xem người dùng có được phép sử dụng bot không
+    if user_id not in authorized_users:
+        await update.message.reply_text("❗ Bạn không có quyền sử dụng bot này.")
+        return
 
-# Reset số lần sử dụng sau 1 giờ
-def reset_usage_count():
-    while True:
-        time.sleep(3600)  # Chờ 1 giờ
-        user_usage_count.clear()  # Đặt lại số lần sử dụng của tất cả người dùng
+    # Kiểm tra số lần đã sử dụng lệnh
+    if user_id in usage_count and usage_count[user_id] >= MAX_USAGE:
+        await update.message.reply_text(f"❗ Bạn đã sử dụng lệnh tối đa {MAX_USAGE} lần.")
+        return
 
-# Decorator chỉ dùng trong nhóm
-def only_in_group(func):
-    @wraps(func)
-    def wrapper(message):
-        if message.chat.id != GROUP_ID:
-            bot.reply_to(message, "❌ Lệnh này chỉ sử dụng được trong nhóm @Baohuydevs được chỉ định.")
+    current_time = time.time()
+
+    # Kiểm tra cooldown
+    if user_id in cooldowns:
+        elapsed_time = current_time - cooldowns[user_id]
+        if elapsed_time < 30:
+            remaining = int(30 - elapsed_time)
+            await update.message.reply_text(f"⏳ Vui lòng chờ {remaining} giây trước khi dùng lệnh lại.")
             return
-        return func(message)
-    return wrapper
 
-# Hàm kiểm tra cooldown, số lần sử dụng và thực thi lệnh
-def execute_with_checks(message, command, action):
-    user_id = message.from_user.id
-    if is_on_cooldown(user_id, command):
-        bot.reply_to(message, "❌ Bạn đang trong thời gian chờ, vui lòng thử lại sau 30 giây.")
+    # Kiểm tra tham số username
+    if not context.args:
+        await update.message.reply_text(
+            "⚡ Vui lòng nhập username TikTok.\nVí dụ: /treovip baohuydz158"
+        )
         return
-    if not check_usage_limit(user_id, command):
-        bot.reply_to(message, f"❌ Bạn đã sử dụng lệnh này {MAX_USAGE_COUNT} lần trong 1 giờ. Vui lòng thử lại sau.")
-        return
-    action(message)
 
-# Tự động gọi API mỗi 15 phút
-def auto_buff(username, chat_id, user_id):
-    if user_id not in auto_buff_tasks:
-        return  # Đã bị huỷ
+    username = context.args[0]
+    url = f"http://ngocan.infinityfreeapp.com/ntik.php?username={username}&key=ngocanvip"
 
-    api_url = f"https://http://ngocan.infinityfreeapp.com/ntik.php?username={username}&key=ngocanvip"
     try:
-        response = requests.get(api_url, timeout=80)
-        data = response.json()
-        bot.send_message(chat_id, f"✅ Tự động buff cho `@{username}` thành công!\n"
-                                  f"➕ Thêm: {data.get('followers_add', 0)}\n"
-                                  f"💬 {data.get('message', 'Không có')}",
-                         parse_mode="Markdown")
+        response = requests.get(url, timeout=30)
+        if response.status_code == 200:
+            await update.message.reply_text(
+                f"**Kết quả cho `{username}`:**\n\n{response.text}",
+                parse_mode="Markdown"
+            )
+        else:
+            await update.message.reply_text(f"❗ Lỗi API: {response.status_code}")
     except Exception as e:
-        bot.send_message(chat_id, f"❌ Lỗi khi tự động buff: {e}")
+        await update.message.reply_text(f"❗ Lỗi kết nối API:\n`{str(e)}`", parse_mode="Markdown")
 
-    if user_id in auto_buff_tasks:
-        task = threading.Timer(900, auto_buff, args=[username, chat_id, user_id])  # Thực hiện lại sau 15 phút
-        auto_buff_tasks[user_id] = task
-        task.start()
+    # Cập nhật thời gian và số lần sử dụng lệnh
+    cooldowns[user_id] = current_time
+    if user_id not in usage_count:
+        usage_count[user_id] = 0
+    usage_count[user_id] += 1
 
-# Lệnh /buff bắt đầu quá trình tự động buff
-@bot.message_handler(commands=['buff'])
-@only_in_group
-def handle_buff(message):
-    execute_with_checks(message, "buff", lambda msg: bot.reply_to(msg, "Tự động buff đang chạy..."))
+# Hàm xử lý lệnh /adduser
+async def adduser(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.message.from_user.id
 
-# Lệnh /start để khởi tạo cho người dùng khi tham gia nhóm
-@bot.message_handler(commands=['start'])
-def handle_start(message):
-    bot.reply_to(message, "Chào mừng bạn đến với bot của chúng tôi! Hãy sử dụng các lệnh đã được thiết lập.")
+    # Kiểm tra xem người dùng có quyền thêm người dùng không (chỉ admin của bot có quyền này)
+    if user_id != ALLOWED_USER_ID:
+        await update.message.reply_text("❗ Bạn không có quyền sử dụng lệnh này.")
+        return
 
-# Lệnh /help để hướng dẫn người dùng
-@bot.message_handler(commands=['help'])
-def handle_help(message):
-    bot.reply_to(message, "Các lệnh có sẵn:\n"
-                           "/buff - Thực hiện buff tự động cho tài khoản.\n"
-                           "/start - Khởi tạo bot.\n"
-                           "/help - Hiển thị hướng dẫn.")
+    # Kiểm tra tham số username
+    if not context.args:
+        await update.message.reply_text("⚡ Vui lòng nhập user_id của người dùng cần thêm vào danh sách.")
+        return
 
-# Thực thi lệnh /treo2 (ví dụ lệnh kiểm tra thông tin tài khoản TikTok)
-@bot.message_handler(commands=['treo2'])
-@only_in_group
-def handle_treo2(message):
-    execute_with_checks(message, "treo2", lambda msg: bot.reply_to(msg, "Đang kiểm tra tài khoản TikTok..."))
+    try:
+        new_user_id = int(context.args[0])  # Lấy user_id từ tham số
+        authorized_users.add(new_user_id)  # Thêm người dùng vào danh sách quyền
+        await update.message.reply_text(f"✅ Người dùng {new_user_id} đã được thêm vào danh sách quyền.")
+    except ValueError:
+        await update.message.reply_text("❗ User ID không hợp lệ. Vui lòng nhập một số nguyên.")
+    except Exception as e:
+        await update.message.reply_text(f"❗ Lỗi xảy ra khi thêm người dùng:\n{str(e)}")
 
-# Đảm bảo bot tiếp tục chạy
-keep_alive()
+# Khởi tạo app
+app = ApplicationBuilder().token(BOT_TOKEN).build()
 
-# Bắt đầu một thread để reset số lần sử dụng sau mỗi giờ
-threading.Thread(target=reset_usage_count, daemon=True).start()
+# Đăng ký các lệnh
+app.add_handler(CommandHandler("treovip", treovip))
+app.add_handler(CommandHandler("adduser", adduser))
+
+# Chạy keep_alive để giữ bot luôn hoạt động
+keep_alive()  # Gọi keep_alive để duy trì kết nối
+
+# Chạy bot
+app.run_polling()

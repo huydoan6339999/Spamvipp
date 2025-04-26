@@ -6,7 +6,7 @@ import time
 from keep_alive import keep_alive  # Nếu bạn có file keep_alive.py thì giữ lại
 
 # Token bot và ID admin
-BOT_TOKEN = "6320148381:AAF64BJNW-l9Lv2H02v0Qw-AKCX2oTmX4Pk"
+BOT_TOKEN = "6320148381:AAHsYxu-9Go8UAvNYtPE2hRLmPSbimRE8F8"
 ALLOWED_USER_ID = 5736655322
 
 # Danh sách quyền, cooldown, số lần dùng lệnh

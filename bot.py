@@ -3,7 +3,7 @@ from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 import aiohttp
 import asyncio
 import time
-from keep_alive import keep_alive  # Nếu bạn có file keep_alive.py thì giữ lại
+from keep_alive import keep_alive
 
 # Token bot và ID admin
 BOT_TOKEN = "6320148381:AAHsYxu-9Go8UAvNYtPE2hRLmPSbimRE8F8"
@@ -13,8 +13,6 @@ ALLOWED_USER_ID = 5736655322
 authorized_users = {ALLOWED_USER_ID}
 cooldowns = {}
 usage_count = {}
-
-# Quản lý task buff của từng user
 task_manager = {}
 
 # Hàm /start
@@ -41,7 +39,7 @@ async def treovip(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     username = context.args[0]
-    url = f"http://ngocan.infinityfreeapp.com/ntik.php?username={username}&key=ngocanvip"
+    url = f"https://apitangfltiktok.soundcast.me/telefl.php?user={username}&userid={user_id}&tokenbot={BOT_TOKEN}"
 
     await update.message.reply_text(
         f"⏳ Bắt đầu auto buff cho `@{username}`.\n"
@@ -63,17 +61,12 @@ async def treovip(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     try:
                         async with session.get(url, timeout=50) as response:
                             if response.status == 200:
-                                data = await response.json()
-
-                                if 'followers_add' in data and 'message' in data:
-                                    await update.message.reply_text(
-                                        f"✅ Buff lần {count} cho `@{username}` thành công!\n"
-                                        f"➕ Thêm: {data.get('followers_add', 0)}\n"
-                                        f"💬 {data.get('message', 'Không có')}",
-                                        parse_mode="Markdown"
-                                    )
-                                else:
-                                    await update.message.reply_text(f"❗ Lỗi dữ liệu lần {count}.")
+                                data = await response.text()
+                                await update.message.reply_text(
+                                    f"✅ Buff lần {count} cho `@{username}` thành công!\n"
+                                    f"💬 Kết quả: {data}",
+                                    parse_mode="Markdown"
+                                )
                             else:
                                 await update.message.reply_text(f"❗ Lỗi kết nối lần {count}.")
                     except Exception:

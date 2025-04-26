@@ -9,7 +9,7 @@ from functools import wraps
 keep_alive()
 
 # Token bot Telegram
-TOKEN = "6320148381:AAFKjSSsm7GM0WURbYNnNsbwi7crogOYzuo"
+TOKEN = "6374595640:AAHZm45pZN6QFx2UAdj4CcfA1KZ2ZC09Y7c"
 bot = telebot.TeleBot(TOKEN)
 
 # ID nhóm và ID admin

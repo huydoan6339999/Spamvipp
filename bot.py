@@ -1,8 +1,8 @@
 import time
+import asyncio
+import aiohttp
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
-import aiohttp
-import asyncio
 from keep_alive import keep_alive
 
 # Token bot và ID admin
@@ -116,11 +116,7 @@ async def treovip(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await send_and_delete(update, "⚡ Vui lòng nhập ít nhất 1 username TikTok.\nVí dụ: /treovip baohuydz158 acc2")
         return
 
-    usernames = context.args  # Không giới hạn số lượng usernames nữa
-
-    if len(usernames) > 5:  # Giới hạn tối đa 5 usernames cùng lúc
-        usernames = usernames[:5]
-        await send_and_delete(update, "⚡ Giới hạn số lượng username mỗi lần là 5. Đã tự động cắt bớt.")
+    usernames = context.args  # Không giới hạn số lượng usernames
 
     if user_id in task_manager:
         for task in task_manager[user_id].values():

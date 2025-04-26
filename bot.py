@@ -1,3 +1,4 @@
+import time
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 import aiohttp
@@ -12,14 +13,18 @@ ALLOWED_USER_ID = 5736655322
 authorized_users = {ALLOWED_USER_ID}
 task_manager = {}
 
+# Lưu thời gian khởi động bot
+start_time = time.time()
+
 # Hàm tự gửi tin nhắn và xóa sau 50 giây
 async def send_and_delete(update: Update, text: str, parse_mode="Markdown"):
-    msg = await update.message.reply_text(text, parse_mode=parse_mode)
-    await asyncio.sleep(50)
-    try:
-        await msg.delete()
-    except:
-        pass
+    if update.message:
+        msg = await update.message.reply_text(text, parse_mode=parse_mode)
+        await asyncio.sleep(50)
+        try:
+            await msg.delete()
+        except:
+            pass
 
 # Hàm /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -27,55 +32,73 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "👋 Xin chào!\n"
         "Tôi là bot auto buff TikTok.\n\n"
         "Các lệnh hỗ trợ:\n"
-        "/treovip <username1> <username2> - Auto buff TikTok không giới hạn, mỗi 15 phút 1 lần.\n"
+        "/treovip <username1> <username2> ... - Auto buff TikTok không giới hạn, mỗi 15 phút 1 lần.\n"
         "/stopbuff - Dừng buff đang chạy.\n"
         "/listbuff - Xem danh sách buff đang hoạt động.\n"
         "/adduser <user_id> - Thêm user được phép dùng bot."
     )
+
+# Hàm /uptime
+async def uptime(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.message.from_user.id
+
+    if user_id not in authorized_users:
+        await send_and_delete(update, "❗ Bạn không có quyền sử dụng lệnh này.")
+        return
+
+    # Tính toán thời gian uptime
+    uptime_seconds = int(time.time() - start_time)
+    hours = uptime_seconds // 3600
+    minutes = (uptime_seconds % 3600) // 60
+    seconds = uptime_seconds % 60
+
+    uptime_message = f"⏳ Bot đã hoạt động trong: {hours} giờ {minutes} phút {seconds} giây."
+    await send_and_delete(update, uptime_message)
 
 # Hàm buff cho từng username
 async def auto_buff(update: Update, user_id: int, username: str):
     url = f"https://apitangfltiktok.soundcast.me/telefl.php?user={username}&userid={user_id}&tokenbot={BOT_TOKEN}"
     success_count = 0
 
+    session = aiohttp.ClientSession()  # Tạo session 1 lần
     try:
         while True:
-            async with aiohttp.ClientSession() as session:
-                try:
-                    async with session.get(url, timeout=50) as response:
-                        if response.status == 200:
-                            data = await response.text()
-                            success_count += 1
+            try:
+                async with session.get(url, timeout=50) as response:
+                    if response.status == 200:
+                        data = await response.text()
+                        success_count += 1
 
-                            message = "✅ Channel: Treo thành công!\n"
-                            if data.strip() == "":
-                                message += "💬 Không có thông báo từ API."
-                            else:
-                                message += f"💬 Kết quả: {data}"
-
-                            await send_and_delete(update, message)
-
-                            if success_count % 10 == 0:
-                                await send_and_delete(update,
-                                    f"⭐ Đã buff tổng cộng {success_count} lần cho `@{username}`!"
-                                )
+                        message = "✅ Channel: Treo thành công!\n"
+                        if data.strip() == "":
+                            message += "💬 Không có thông báo từ API."
                         else:
+                            message += f"💬 Kết quả: {data}"
+
+                        await send_and_delete(update, message)
+
+                        if success_count % 10 == 0:
                             await send_and_delete(update,
-                                "✅ Channel: Treo thành công!\n💬 Không có thông báo từ API."
+                                f"⭐ Đã buff tổng cộng {success_count} lần cho `@{username}`!"
                             )
-                except asyncio.TimeoutError:
-                    await send_and_delete(update,
-                        "✅ Channel: Treo thành công!\n💬 Không có thông báo từ API."
-                    )
-                except Exception:
-                    await send_and_delete(update,
-                        "✅ Channel: Treo thành công!\n💬 Không có thông báo từ API."
-                    )
+                    else:
+                        await send_and_delete(update,
+                            "✅ Channel: Treo thành công!\n💬 Không có thông báo từ API."
+                        )
+            except asyncio.TimeoutError:
+                await send_and_delete(update,
+                    "✅ Channel: Treo thành công!\n💬 Không có thông báo từ API."
+                )
+            except Exception:
+                await send_and_delete(update,
+                    "✅ Channel: Treo thành công!\n💬 Không có thông báo từ API."
+                )
 
             await asyncio.sleep(900)  # 15 phút
     except asyncio.CancelledError:
         await send_and_delete(update, f"⛔ Đã dừng buff tự động cho @{username}.")
     finally:
+        await session.close()  # Đóng session khi dừng
         if user_id in task_manager and username in task_manager[user_id]:
             del task_manager[user_id][username]
             if not task_manager[user_id]:
@@ -93,7 +116,11 @@ async def treovip(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await send_and_delete(update, "⚡ Vui lòng nhập ít nhất 1 username TikTok.\nVí dụ: /treovip baohuydz158 acc2")
         return
 
-    usernames = context.args[:2]
+    usernames = context.args  # Không giới hạn số lượng usernames nữa
+
+    if len(usernames) > 5:  # Giới hạn tối đa 5 usernames cùng lúc
+        usernames = usernames[:5]
+        await send_and_delete(update, "⚡ Giới hạn số lượng username mỗi lần là 5. Đã tự động cắt bớt.")
 
     if user_id in task_manager:
         for task in task_manager[user_id].values():
@@ -102,6 +129,7 @@ async def treovip(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     task_manager[user_id] = {}
 
+    # Tạo task cho tất cả username gửi vào
     for username in usernames:
         task = asyncio.create_task(auto_buff(update, user_id, username))
         task_manager[user_id][username] = task
@@ -124,6 +152,10 @@ async def stopbuff(update: Update, context: ContextTypes.DEFAULT_TYPE):
         for task in task_manager[user_id].values():
             if not task.done():
                 task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
         del task_manager[user_id]
         await send_and_delete(update, "⛔ Đã dừng toàn bộ buff đang chạy!")
     else:
@@ -171,6 +203,7 @@ app = ApplicationBuilder().token(BOT_TOKEN).build()
 
 # Đăng ký lệnh
 app.add_handler(CommandHandler("start", start))
+app.add_handler(CommandHandler("uptime", uptime))  # Đăng ký lệnh /uptime
 app.add_handler(CommandHandler("treovip", treovip))
 app.add_handler(CommandHandler("stopbuff", stopbuff))
 app.add_handler(CommandHandler("listbuff", listbuff))

@@ -55,8 +55,14 @@ async def treovip(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         response = requests.get(url, timeout=30)
         if response.status_code == 200:
+            # Parse JSON data
+            data = response.json()
+
+            # Send success message with additional data
             await update.message.reply_text(
-                f"**Kết quả cho `{username}`:**\n\n{response.text}",
+                f"✅ Tự động buff cho `@{username}` thành công!\n"
+                f"➕ Thêm: {data.get('followers_add', 0)}\n"
+                f"💬 {data.get('message', 'Không có')}",
                 parse_mode="Markdown"
             )
         else:

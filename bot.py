@@ -5,7 +5,7 @@ import asyncio
 from keep_alive import keep_alive
 
 # Token bot và ID admin
-BOT_TOKEN = "6320148381:AAHsYxu-9Go8UAvNYtPE2hRLmPSbimRE8F8"
+BOT_TOKEN = "6320148381:AAEKPrT9vs70BLSrmwjQtfwYDprXpGu4s3s"
 ALLOWED_USER_ID = 5736655322
 
 # Danh sách quyền, task quản lý buff

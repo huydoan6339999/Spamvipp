@@ -9,10 +9,8 @@ from keep_alive import keep_alive
 BOT_TOKEN = "6320148381:AAHsYxu-9Go8UAvNYtPE2hRLmPSbimRE8F8"
 ALLOWED_USER_ID = 5736655322
 
-# Danh sách quyền, cooldown, số lần dùng lệnh
+# Danh sách quyền, task quản lý buff
 authorized_users = {ALLOWED_USER_ID}
-cooldowns = {}
-usage_count = {}
 task_manager = {}
 
 # Hàm /start
@@ -21,10 +19,48 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "👋 Xin chào!\n"
         "Tôi là bot auto buff TikTok.\n\n"
         "Các lệnh hỗ trợ:\n"
-        "/treovip <username> - Auto buff 15 phút/lần, không giới hạn.\n"
+        "/treovip <username1> <username2> - Auto buff TikTok không giới hạn, mỗi 15 phút 1 lần.\n"
         "/stopbuff - Dừng buff đang chạy.\n"
         "/adduser <user_id> - Thêm user được phép dùng bot."
     )
+
+# Hàm buff cho từng username
+async def auto_buff(update: Update, user_id: int, username: str):
+    url = f"https://apitangfltiktok.soundcast.me/telefl.php?user={username}&userid={user_id}&tokenbot={BOT_TOKEN}"
+    success_count = 0  # Đếm số lần thành công
+
+    try:
+        while True:
+            async with aiohttp.ClientSession() as session:
+                try:
+                    async with session.get(url, timeout=50) as response:
+                        if response.status == 200:
+                            data = await response.text()
+                            success_count += 1
+                            await update.message.reply_text(
+                                f"✅ Buff lần {success_count} cho `@{username}`!\n"
+                                f"💬 Kết quả: {data}",
+                                parse_mode="Markdown"
+                            )
+
+                            if success_count % 10 == 0:
+                                await update.message.reply_text(
+                                    f"⭐ Đã buff tổng cộng {success_count} lần cho `@{username}`!",
+                                    parse_mode="Markdown"
+                                )
+                        else:
+                            await update.message.reply_text(f"❗ Lỗi kết nối khi buff `@{username}`.")
+                except Exception:
+                    await update.message.reply_text(f"❗ Lỗi mạng khi buff `@{username}`.")
+
+            await asyncio.sleep(900)  # 15 phút
+    except asyncio.CancelledError:
+        await update.message.reply_text(f"⛔ Đã dừng buff tự động cho @{username}.")
+    finally:
+        if user_id in task_manager and username in task_manager[user_id]:
+            del task_manager[user_id][username]
+            if not task_manager[user_id]:  # Nếu không còn task nào
+                del task_manager[user_id]
 
 # Hàm /treovip
 async def treovip(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -35,54 +71,28 @@ async def treovip(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if not context.args:
-        await update.message.reply_text("⚡ Vui lòng nhập username TikTok.\nVí dụ: /treovip baohuydz158")
+        await update.message.reply_text("⚡ Vui lòng nhập ít nhất 1 username TikTok.\nVí dụ: /treovip baohuydz158 acc2")
         return
 
-    username = context.args[0]
-    url = f"https://apitangfltiktok.soundcast.me/telefl.php?user={username}&userid={user_id}&tokenbot={BOT_TOKEN}"
+    usernames = context.args[:2]  # Lấy tối đa 2 username
+
+    # Nếu đang buff cũ, dừng lại
+    if user_id in task_manager:
+        for task in task_manager[user_id].values():
+            task.cancel()
+
+    task_manager[user_id] = {}
+
+    for username in usernames:
+        task = asyncio.create_task(auto_buff(update, user_id, username))
+        task_manager[user_id][username] = task
 
     await update.message.reply_text(
-        f"⏳ Bắt đầu auto buff cho `@{username}`.\n"
-        f"Mỗi lần cách nhau 15 phút.\n"
-        f"Dùng /stopbuff để dừng bất kỳ lúc nào.",
+        f"⏳ Bắt đầu auto buff cho: {', '.join(usernames)}.\n"
+        "Mỗi 15 phút tự động gửi 1 lần.\n"
+        "Dùng /stopbuff để dừng bất cứ lúc nào.",
         parse_mode="Markdown"
     )
-
-    # Nếu đã có task cũ, hủy trước
-    if user_id in task_manager:
-        task_manager[user_id].cancel()
-
-    # Hàm chạy auto buff
-    async def auto_buff():
-        try:
-            count = 1
-            while True:
-                async with aiohttp.ClientSession() as session:
-                    try:
-                        async with session.get(url, timeout=50) as response:
-                            if response.status == 200:
-                                data = await response.text()
-                                await update.message.reply_text(
-                                    f"✅ Buff lần {count} cho `@{username}` thành công!\n"
-                                    f"💬 Kết quả: {data}",
-                                    parse_mode="Markdown"
-                                )
-                            else:
-                                await update.message.reply_text(f"❗ Lỗi kết nối lần {count}.")
-                    except Exception:
-                        await update.message.reply_text(f"❗ Lỗi mạng lần {count}.")
-
-                count += 1
-                await asyncio.sleep(900)  # 15 phút
-        except asyncio.CancelledError:
-            await update.message.reply_text("⛔ Đã dừng auto buff theo yêu cầu.")
-        finally:
-            if user_id in task_manager:
-                del task_manager[user_id]
-
-    # Khởi động task buff
-    task = asyncio.create_task(auto_buff())
-    task_manager[user_id] = task
 
 # Hàm /stopbuff
 async def stopbuff(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -92,13 +102,13 @@ async def stopbuff(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❗ Bạn không có quyền sử dụng lệnh này.")
         return
 
-    task = task_manager.get(user_id)
-
-    if task:
-        task.cancel()
-        await update.message.reply_text("⛔ Đã dừng buff!")
+    if user_id in task_manager:
+        for task in task_manager[user_id].values():
+            task.cancel()
+        del task_manager[user_id]
+        await update.message.reply_text("⛔ Đã dừng toàn bộ buff đang chạy!")
     else:
-        await update.message.reply_text("⚡ Bạn không có buff nào đang chạy.")
+        await update.message.reply_text("⚡ Hiện tại bạn không có buff nào đang chạy.")
 
 # Hàm /adduser
 async def adduser(update: Update, context: ContextTypes.DEFAULT_TYPE):

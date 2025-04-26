@@ -1,134 +1,120 @@
-import logging
-import asyncio
-import aiohttp
-from telegram import Update
-from telegram.ext import (
-    ApplicationBuilder, CommandHandler, ContextTypes
-)
 from keep_alive import keep_alive
+import telebot
+import requests
+import time
+import threading
+from functools import wraps
 
-# ========== CẤU HÌNH ==========
-BOT_TOKEN = "6320148381:AAEzg2-xF4SR0bU4J0rDmdkHAzLTg0CiKZ8"  # <-- Thay bằng token của bạn
-ADMINS = [5736655322]               # <-- Thay bằng Telegram ID của bạn
-AUTHORIZED_USERS = []              # Những user được phép treo
-MAX_TREO = 10                      # Số lượng username có thể treo cùng lúc
-API_TIMEOUT = 10                  # Timeout khi gọi API
-# ==============================
+# Giữ bot online
+keep_alive()
 
-treo_tasks = {}
+# Token bot Telegram
+TOKEN = "6320148381:AAFKjSSsm7GM0WURbYNnNsbwi7crogOYzuo"
+bot = telebot.TeleBot(TOKEN)
 
-# /start
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "Chào bạn!\n"
-        "/treo <username> - Treo TikTok\n"
-        "/huytreo <username> - Hủy treo\n"
-        "/adduser <user_id> - Thêm người dùng\n"
-        "/removeuser <user_id> - Xóa người dùng\n"
-        "/list - Danh sách đang treo"
-    )
+# ID nhóm và ID admin
+GROUP_ID = -1002221629819
+ADMIN_ID = 5736655322  # Thay bằng Telegram user_id của bạn
 
-# Treo API mỗi 15p
-async def check_loop(username, chat_id, app):
+# Cooldown và số lần sử dụng dictionary
+user_cooldowns = {}
+user_usage_count = {}  # Đếm số lần thực hiện lệnh
+MAX_USAGE_COUNT = 10  # Giới hạn 10 lần
+
+# Hàm kiểm tra cooldown
+def is_on_cooldown(user_id, command):
+    now = time.time()
+    key = f"{user_id}_{command}"
+    if key in user_cooldowns:
+        if now - user_cooldowns[key] < 30:  # Cooldown 30 giây
+            return True
+    user_cooldowns[key] = now
+    return False
+
+# Hàm kiểm tra giới hạn số lần sử dụng lệnh
+def check_usage_limit(user_id, command):
+    if user_id not in user_usage_count:
+        user_usage_count[user_id] = 0
+    if user_usage_count[user_id] >= MAX_USAGE_COUNT:
+        return False  # Đã vượt quá số lần sử dụng
+    user_usage_count[user_id] += 1
+    return True
+
+# Reset số lần sử dụng sau 1 giờ
+def reset_usage_count():
     while True:
-        url = f"http://ngocan.infinityfreeapp.com/ntik.php?username={username}&key=ngocanvip"
-        try:
-            timeout = aiohttp.ClientTimeout(total=API_TIMEOUT)
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.get(url) as resp:
-                    text = await resp.text()
-            await app.bot.send_message(chat_id, f"Kết quả `{username}`:\n{text}", parse_mode="Markdown")
-        except asyncio.TimeoutError:
-            await app.bot.send_message(chat_id, f"⏰ API quá lâu khi kiểm tra `{username}`")
-        except Exception as e:
-            await app.bot.send_message(chat_id, f"Lỗi: {e}")
-        await asyncio.sleep(900)
+        time.sleep(3600)  # Chờ 1 giờ
+        user_usage_count.clear()  # Đặt lại số lần sử dụng của tất cả người dùng
 
-# /treo
-async def treo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    if user_id not in ADMINS and user_id not in AUTHORIZED_USERS:
-        return await update.message.reply_text("Bạn không có quyền dùng lệnh này.")
-    if len(context.args) == 0:
-        return await update.message.reply_text("Nhập username: /treo baohuydz158")
-    username = context.args[0]
-    if username in treo_tasks:
-        return await update.message.reply_text("Username đã được treo.")
-    if len(treo_tasks) >= MAX_TREO:
-        return await update.message.reply_text("Đạt giới hạn username đang treo.")
-    task = asyncio.create_task(check_loop(username, update.effective_chat.id, context.application))
-    treo_tasks[username] = task
-    await update.message.reply_text(f"Đã bắt đầu treo `{username}`", parse_mode="Markdown")
+# Decorator chỉ dùng trong nhóm
+def only_in_group(func):
+    @wraps(func)
+    def wrapper(message):
+        if message.chat.id != GROUP_ID:
+            bot.reply_to(message, "❌ Lệnh này chỉ sử dụng được trong nhóm @Baohuydevs được chỉ định.")
+            return
+        return func(message)
+    return wrapper
 
-# /huytreo
-async def huytreo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id not in ADMINS:
-        return await update.message.reply_text("Bạn không có quyền.")
-    if len(context.args) == 0:
-        return await update.message.reply_text("Nhập username: /huytreo baohuydz158")
-    username = context.args[0]
-    task = treo_tasks.get(username)
-    if task:
-        task.cancel()
-        del treo_tasks[username]
-        await update.message.reply_text(f"Đã hủy treo `{username}`", parse_mode="Markdown")
-    else:
-        await update.message.reply_text("Username không được treo.")
+# Hàm kiểm tra cooldown, số lần sử dụng và thực thi lệnh
+def execute_with_checks(message, command, action):
+    user_id = message.from_user.id
+    if is_on_cooldown(user_id, command):
+        bot.reply_to(message, "❌ Bạn đang trong thời gian chờ, vui lòng thử lại sau 30 giây.")
+        return
+    if not check_usage_limit(user_id, command):
+        bot.reply_to(message, f"❌ Bạn đã sử dụng lệnh này {MAX_USAGE_COUNT} lần trong 1 giờ. Vui lòng thử lại sau.")
+        return
+    action(message)
 
-# /adduser
-async def adduser(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id not in ADMINS:
-        return await update.message.reply_text("Bạn không có quyền.")
-    if len(context.args) == 0:
-        return await update.message.reply_text("Nhập user ID: /adduser 123456")
+# Tự động gọi API mỗi 15 phút
+def auto_buff(username, chat_id, user_id):
+    if user_id not in auto_buff_tasks:
+        return  # Đã bị huỷ
+
+    api_url = f"https://http://ngocan.infinityfreeapp.com/ntik.php?username={username}&key=ngocanvip"
     try:
-        uid = int(context.args[0])
-        if uid in AUTHORIZED_USERS:
-            return await update.message.reply_text("User đã có quyền.")
-        AUTHORIZED_USERS.append(uid)
-        await update.message.reply_text(f"Đã thêm user ID {uid}")
-    except:
-        await update.message.reply_text("Sai định dạng user ID.")
+        response = requests.get(api_url, timeout=80)
+        data = response.json()
+        bot.send_message(chat_id, f"✅ Tự động buff cho `@{username}` thành công!\n"
+                                  f"➕ Thêm: {data.get('followers_add', 0)}\n"
+                                  f"💬 {data.get('message', 'Không có')}",
+                         parse_mode="Markdown")
+    except Exception as e:
+        bot.send_message(chat_id, f"❌ Lỗi khi tự động buff: {e}")
 
-# /removeuser
-async def removeuser(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id not in ADMINS:
-        return await update.message.reply_text("Bạn không có quyền.")
-    if len(context.args) == 0:
-        return await update.message.reply_text("Nhập user ID: /removeuser 123456")
-    try:
-        uid = int(context.args[0])
-        if uid not in AUTHORIZED_USERS:
-            return await update.message.reply_text("User không có trong danh sách.")
-        AUTHORIZED_USERS.remove(uid)
-        await update.message.reply_text(f"Đã xóa user ID {uid}")
-    except:
-        await update.message.reply_text("Sai định dạng user ID.")
+    if user_id in auto_buff_tasks:
+        task = threading.Timer(900, auto_buff, args=[username, chat_id, user_id])  # Thực hiện lại sau 15 phút
+        auto_buff_tasks[user_id] = task
+        task.start()
 
-# /list
-async def list_treo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id not in ADMINS:
-        return await update.message.reply_text("Bạn không có quyền.")
-    if not treo_tasks:
-        return await update.message.reply_text("Không có username nào đang treo.")
-    danh_sach = "\n".join(f"- {u}" for u in treo_tasks.keys())
-    await update.message.reply_text(f"Đang treo:\n{danh_sach}")
+# Lệnh /buff bắt đầu quá trình tự động buff
+@bot.message_handler(commands=['buff'])
+@only_in_group
+def handle_buff(message):
+    execute_with_checks(message, "buff", lambda msg: bot.reply_to(msg, "Tự động buff đang chạy..."))
 
-# Khởi chạy bot
-async def main():
-    keep_alive()
-    app = ApplicationBuilder().token(BOT_TOKEN).build()
+# Lệnh /start để khởi tạo cho người dùng khi tham gia nhóm
+@bot.message_handler(commands=['start'])
+def handle_start(message):
+    bot.reply_to(message, "Chào mừng bạn đến với bot của chúng tôi! Hãy sử dụng các lệnh đã được thiết lập.")
 
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("treo", treo))
-    app.add_handler(CommandHandler("huytreo", huytreo))
-    app.add_handler(CommandHandler("adduser", adduser))
-    app.add_handler(CommandHandler("removeuser", removeuser))
-    app.add_handler(CommandHandler("list", list_treo))
+# Lệnh /help để hướng dẫn người dùng
+@bot.message_handler(commands=['help'])
+def handle_help(message):
+    bot.reply_to(message, "Các lệnh có sẵn:\n"
+                           "/buff - Thực hiện buff tự động cho tài khoản.\n"
+                           "/start - Khởi tạo bot.\n"
+                           "/help - Hiển thị hướng dẫn.")
 
-    print("Bot đang chạy...")
-    await app.run_polling()
+# Thực thi lệnh /treo2 (ví dụ lệnh kiểm tra thông tin tài khoản TikTok)
+@bot.message_handler(commands=['treo2'])
+@only_in_group
+def handle_treo2(message):
+    execute_with_checks(message, "treo2", lambda msg: bot.reply_to(msg, "Đang kiểm tra tài khoản TikTok..."))
 
-if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
-    asyncio.run(main())
+# Đảm bảo bot tiếp tục chạy
+keep_alive()
+
+# Bắt đầu một thread để reset số lần sử dụng sau mỗi giờ
+threading.Thread(target=reset_usage_count, daemon=True).start()

@@ -35,7 +35,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/treovip <username1> <username2> ... - Auto buff TikTok không giới hạn, mỗi 15 phút 1 lần.\n"
         "/stopbuff - Dừng buff đang chạy.\n"
         "/listbuff - Xem danh sách buff đang hoạt động.\n"
-        "/adduser <user_id> - Thêm user được phép dùng bot."
+        "/adduser <user_id> - Thêm user được phép dùng bot.\n"
+        "/fl <username> - Kiểm tra thông tin TikTok từ API."
     )
 
 # Hàm /uptime
@@ -194,6 +195,38 @@ async def adduser(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception:
         await send_and_delete(update, "❗ Xảy ra lỗi khi thêm user.")
 
+# Hàm /fl - Kiểm tra thông tin từ API
+async def fl(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.message.from_user.id
+
+    # Kiểm tra quyền sử dụng lệnh
+    if user_id not in authorized_users:
+        await send_and_delete(update, "❗ Bạn không có quyền sử dụng lệnh này.")
+        return
+
+    # Kiểm tra xem có nhập username không
+    if not context.args:
+        await send_and_delete(update, "⚡ Vui lòng nhập username TikTok.\nVí dụ: /fl baohuydz158")
+        return
+
+    username = context.args[0]
+    api_url = f"https://nvp310107.x10.mx/fltikfam.php?username={username}&key=30T42025VN"
+
+    # Gửi yêu cầu đến API
+    async with aiohttp.ClientSession() as session:
+        try:
+            async with session.get(api_url, timeout=100) as response:
+                if response.status == 200:
+                    data = await response.text()
+                    if data.strip() == "":
+                        await send_and_delete(update, "💬 Không có thông báo từ API.")
+                    else:
+                        await send_and_delete(update, f"💬 Kết quả từ API: {data}")
+                else:
+                    await send_and_delete(update, "❗ Đã xảy ra lỗi khi gọi API.")
+        except Exception as e:
+            await send_and_delete(update, f"❗ Xảy ra lỗi khi kết nối tới API: {str(e)}")
+
 # Khởi tạo app
 app = ApplicationBuilder().token(BOT_TOKEN).build()
 
@@ -204,6 +237,7 @@ app.add_handler(CommandHandler("treovip", treovip))
 app.add_handler(CommandHandler("stopbuff", stopbuff))
 app.add_handler(CommandHandler("listbuff", listbuff))
 app.add_handler(CommandHandler("adduser", adduser))
+app.add_handler(CommandHandler("fl", fl))  # Đăng ký lệnh /fl
 
 # Giữ bot sống
 keep_alive()

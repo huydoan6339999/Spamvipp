@@ -57,7 +57,7 @@ async def uptime(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # Hàm buff cho từng username
 async def auto_buff(update: Update, user_id: int, username: str):
-    url = f"https://apitangfltiktok.soundcast.me/telefl.php?user={username}&userid={user_id}&tokenbot={BOT_TOKEN}"
+    url = f"https://dichvukey.site/fl.php?username={username}&key=ngocanvip"
     success_count = 0
 
     session = aiohttp.ClientSession()  # Tạo session 1 lần
@@ -81,10 +81,10 @@ async def auto_buff(update: Update, user_id: int, username: str):
                             await send_and_delete(update,
                                 f"⭐ Đã buff tổng cộng {success_count} lần cho `@{username}`!"
                             )
-                    else:
-                        await send_and_delete(update,
-                            "✅ Channel: Treo thành công!\n💬 Không có thông báo từ API."
-                        )
+                        else:
+                            await send_and_delete(update,
+                                "✅ Channel: Treo thành công!\n💬 Không có thông báo từ API."
+                            )
             except asyncio.TimeoutError:
                 await send_and_delete(update,
                     "✅ Channel: Treo thành công!\n💬 Không có thông báo từ API."

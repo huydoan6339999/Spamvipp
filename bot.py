@@ -23,11 +23,16 @@ async def send_and_delete(update: Update, text: str, parse_mode="Markdown"):
         await asyncio.sleep(50)
         try:
             await msg.delete()
-        except:
-            pass
+        except Exception as e:
+            print(f"Error deleting message: {e}")
 
 # Hàm /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.message.from_user.id
+    if user_id not in authorized_users:
+        await send_and_delete(update, "❗ Bạn không có quyền sử dụng bot này.")
+        return
+
     await send_and_delete(update,
         "👋 Xin chào!\n"
         "Tôi là bot auto buff TikTok.\n\n"
@@ -56,7 +61,7 @@ async def uptime(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uptime_message = f"⏳ Bot đã hoạt động trong: {hours} giờ {minutes} phút {seconds} giây."
     await send_and_delete(update, uptime_message)
 
-# Hàm buff cho từng username
+# Hàm /treovip - Auto buff TikTok
 async def auto_buff(update: Update, user_id: int, username: str):
     url = f"https://dichvukey.site/fl.php?username={username}&key=ngocanvip"
     success_count = 0
@@ -199,12 +204,10 @@ async def adduser(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def fl(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
 
-    # Kiểm tra quyền sử dụng lệnh
     if user_id not in authorized_users:
         await send_and_delete(update, "❗ Bạn không có quyền sử dụng lệnh này.")
         return
 
-    # Kiểm tra xem có nhập username không
     if not context.args:
         await send_and_delete(update, "⚡ Vui lòng nhập username TikTok.\nVí dụ: /fl baohuydz158")
         return
@@ -212,7 +215,6 @@ async def fl(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = context.args[0]
     api_url = f"https://nvp310107.x10.mx/fltikfam.php?username={username}&key=30T42025VN"
 
-    # Gửi yêu cầu đến API
     async with aiohttp.ClientSession() as session:
         try:
             async with session.get(api_url, timeout=100) as response:
@@ -232,12 +234,12 @@ app = ApplicationBuilder().token(BOT_TOKEN).build()
 
 # Đăng ký lệnh
 app.add_handler(CommandHandler("start", start))
-app.add_handler(CommandHandler("uptime", uptime))  # Đăng ký lệnh /uptime
+app.add_handler(CommandHandler("uptime", uptime))
 app.add_handler(CommandHandler("treovip", treovip))
 app.add_handler(CommandHandler("stopbuff", stopbuff))
 app.add_handler(CommandHandler("listbuff", listbuff))
 app.add_handler(CommandHandler("adduser", adduser))
-app.add_handler(CommandHandler("fl", fl))  # Đăng ký lệnh /fl
+app.add_handler(CommandHandler("fl", fl))
 
 # Giữ bot sống
 keep_alive()

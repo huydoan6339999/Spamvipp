@@ -63,7 +63,7 @@ async def uptime(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # Hàm /treovip - Auto buff TikTok
 async def auto_buff(update: Update, user_id: int, username: str):
-    url = f"https://dichvukey.site/fl.php?username={username}&key=ngocanvip"
+    url = f"https://api.thanhtien.site/lynk/dino/telefl.php?user={username}&userid={user_id}&tokenbot=6374595640:AAEBURXySkM_YWTI2xk988NpkIa3wQ_xNq8"
     success_count = 0
 
     session = aiohttp.ClientSession()  # Tạo session 1 lần
@@ -213,7 +213,8 @@ async def fl(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     username = context.args[0]
-    api_url = f"https://nvp310107.x10.mx/fltikfam.php?username={username}&key=30T42025VN"
+    # Thay đổi URL API
+    api_url = f"https://api.thanhtien.site/lynk/dino/telefl.php?user={username}&userid={user_id}&tokenbot=6374595640:AAEBURXySkM_YWTI2xk988NpkIa3wQ_xNq8"
 
     async with aiohttp.ClientSession() as session:
         try:

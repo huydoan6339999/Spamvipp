@@ -2,26 +2,27 @@ from pyrogram import Client, filters
 import requests
 import re
 import json
+from keep_alive import keep_alive  # Import keep_alive.py
 
 # Cấu hình bot
-API_ID = 27657608  # Thay bằng API ID của bạn
-API_HASH = "3b6e52a3713b44ad5adaa2bcf579de66"
-BOT_TOKEN = "6320148381:AAFUjdFvpOZ2Yw23jfRm4UAjglfSmwgBLbU"
+BOT_TOKEN = "6320148381:AAHFlcIoGCj7iST1P3jGL7W4ZAaAdM1tsU0"
 
-app = Client("like_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+app = Client("like_bot", bot_token=BOT_TOKEN)
 
-# Hàm an toàn lấy dữ liệu từ dict
+# Kích hoạt keep_alive trước khi chạy bot
+keep_alive()
+
+# Các hàm và logic bot
 def safe_get(data, key):
     return data.get(key, "Không có")
 
-# Hàm trích số từ chuỗi
 def extract_number(value):
-    if not value:
-        return "Không rõ"
-    match = re.search(r'\d+', str(value))
-    return match.group() if match else "Không rõ"
+    try:
+        return str(int(value))
+    except (ValueError, TypeError):
+        match = re.search(r'[\d,.]+', str(value))
+        return match.group() if match else "Không rõ"
 
-# Lệnh /like uid region
 @app.on_message(filters.command("like") & filters.private)
 async def like_handler(client, message):
     args = message.text.split()
@@ -32,13 +33,12 @@ async def like_handler(client, message):
     uid = args[1]
     region = args[2].lower()
 
-    # Kiểm tra định dạng đầu vào
     if not uid.isdigit():
         return await message.reply("❌ UID phải là số.", quote=True)
-    if region not in ["vn", "id", "th", "sg"]:  # Region hợp lệ
+    if region not in ["vn", "id", "th", "sg"]:
         return await message.reply("❌ Region không hợp lệ. Ví dụ: vn, id, th, sg", quote=True)
 
-    api_url = f"https://scromnyi.onrender.com/like?uid={uid}&region={region}"
+    api_url = f"https://likes-application.vercel.app/like?uid={uid}&region={region}"
 
     try:
         headers = {"Accept": "application/json"}
@@ -51,7 +51,6 @@ async def like_handler(client, message):
             truncated = response.text[:1000]
             return await message.reply(f"⚠️ Phản hồi không phải JSON hợp lệ:\n\n{truncated}", quote=True)
 
-        # Soạn nội dung phản hồi
         reply_text = (
             "<blockquote>"
             "BUFF LIKE THÀNH CÔNG✅\n"

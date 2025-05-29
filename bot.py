@@ -2,18 +2,19 @@ from pyrogram import Client, filters
 import requests
 import re
 import json
+from keep_alive import keep_alive  # Gọi keep_alive
 
-# Token bot từ @BotFather
+# Gọi keep_alive để giữ bot hoạt động liên tục
+keep_alive()
+
+# Bot token
 BOT_TOKEN = "6320148381:AAHFlcIoGCj7iST1P3jGL7W4ZAaAdM1tsU0"
-
-# Khởi tạo bot
 app = Client("like_bot", bot_token=BOT_TOKEN)
 
-# Hàm hỗ trợ lấy dữ liệu an toàn
+# Các hàm hỗ trợ
 def safe_get(data, key):
     return data.get(key, "Không có")
 
-# Hàm trích xuất số từ chuỗi
 def extract_number(value):
     try:
         return str(int(value))
@@ -21,12 +22,12 @@ def extract_number(value):
         match = re.search(r'[\d,.]+', str(value))
         return match.group() if match else "Không rõ"
 
-# /start để kiểm tra bot
+# Lệnh kiểm tra bot
 @app.on_message(filters.command("start") & filters.private)
 async def start(client, message):
     await message.reply("✅ Bot đã hoạt động!")
 
-# Lệnh /like để gọi API
+# Lệnh /like xử lý API
 @app.on_message(filters.command("like") & filters.private)
 async def like_handler(client, message):
     args = message.text.split()
@@ -48,12 +49,7 @@ async def like_handler(client, message):
         headers = {"Accept": "application/json"}
         response = requests.get(api_url, timeout=30, headers=headers)
         response.raise_for_status()
-
-        try:
-            data = response.json()
-        except json.JSONDecodeError:
-            truncated = response.text[:1000]
-            return await message.reply(f"⚠️ Phản hồi không phải JSON hợp lệ:\n\n{truncated}", quote=True)
+        data = response.json()
 
         reply_text = (
             "<b>BUFF LIKE THÀNH CÔNG ✅</b>\n"

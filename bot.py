@@ -5,47 +5,62 @@ from aiogram import Bot, Dispatcher, types
 from aiogram.utils import executor
 from keep_alive import keep_alive
 
-# Khởi động keep alive (nếu chạy trên Replit hoặc host tương tự)
-keep_alive()
-
-# Telegram Bot Token
+# === CẤU HÌNH BOT ===
 BOT_TOKEN = "6320148381:AAH_ihVyyOGOHOfDU-XFhi0an-tKXdtgL50"
+
 bot = Bot(token=BOT_TOKEN, parse_mode="HTML")
 dp = Dispatcher(bot)
 
-# Hàm an toàn lấy dữ liệu từ dict
+# === GIỮ BOT HOẠT ĐỘNG (CHO REPLIT/GLITCH) ===
+keep_alive()
+
+# === HÀM HỖ TRỢ ===
 def safe_get(data, key, default="N/A"):
-    return data.get(key) if data.get(key) is not None else default
+    value = data.get(key)
+    return str(value) if value is not None else default
 
-# Hàm lấy số từ chuỗi (nếu API trả về kiểu: "50 likes")
-def extract_number(value):
-    if not value:
+def extract_number(text):
+    if not text:
         return "0"
-    return "".join(c for c in str(value) if c.isdigit())
+    return ''.join(c for c in str(text) if c.isdigit())
 
+# === LỆNH START ===
 @dp.message_handler(commands=["start", "help"])
-async def welcome(message: types.Message):
-    await message.reply("👋 Chào bạn!\nGửi lệnh:\n<code>/like uid region</code>\n\nVí dụ: <code>/like 123456789 SEA</code>")
+async def start_handler(message: types.Message):
+    await message.reply(
+        "👋 Xin chào!\n"
+        "Gửi lệnh:\n<code>/like uid region</code>\n"
+        "Ví dụ: <code>/like 123456789 SEA</code>"
+    )
 
+# === LỆNH /LIKE ===
 @dp.message_handler(commands=["like"])
 async def like_handler(message: types.Message):
     args = message.text.strip().split()
 
     if len(args) != 3:
-        await message.reply("❌ Sai cú pháp.\nDùng: <code>/like uid region</code>\nVí dụ: <code>/like 123456789 SEA</code>")
+        await message.reply("❌ Sai cú pháp!\nDùng: <code>/like uid region</code>\nVí dụ: <code>/like 123456789 SEA</code>")
         return
 
     uid = args[1]
     region = args[2]
-    url = f"https://likes-application.vercel.app/like?uid={uid}&region={region}"
-
+    api_url = f"https://likes-application.vercel.app/like?uid={uid}&region={region}"
     start_time = time.time()
 
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.get(url) as resp:
+            async with session.get(api_url) as resp:
                 elapsed = time.time() - start_time
-                data = await resp.json()
+                try:
+                    data = await resp.json()
+                except Exception:
+                    text_data = await resp.text()
+                    await message.reply(
+                        f"❌ API trả về không đúng định dạng JSON.\n"
+                        f"<code>{text_data}</code>\n"
+                        f"⏱ Phản hồi sau {elapsed:.2f} giây"
+                    )
+                    return
 
                 if resp.status == 200 and data.get("success"):
                     reply_text = (
@@ -59,12 +74,18 @@ async def like_handler(message: types.Message):
                         f"⏱ Thời gian phản hồi: {elapsed:.2f} giây"
                     )
                 else:
-                    reply_text = f"❌ API trả về lỗi:\n<code>{data}</code>\n⏱ {elapsed:.2f} giây"
+                    reply_text = (
+                        "❌ API trả về lỗi.\n"
+                        f"<code>{data}</code>\n"
+                        f"⏱ Phản hồi sau {elapsed:.2f} giây"
+                    )
 
                 await message.reply(reply_text)
-    except Exception as e:
-        await message.reply(f"❌ Lỗi khi gọi API:\n<code>{e}</code>")
 
+    except Exception as e:
+        await message.reply(f"❌ Lỗi khi gọi API:\n<code>{str(e)}</code>")
+
+# === CHẠY BOT ===
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     executor.start_polling(dp, skip_updates=True)

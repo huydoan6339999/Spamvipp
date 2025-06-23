@@ -1,65 +1,65 @@
+import logging
+import json
+import random
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
-import logging, random
+from sunwin_login import login_to_sunwin
+from sunwin_predictor import predict_outcome
+from pattern_detector import detect_pattern
 from keep_alive import keep_alive
 
-BOT_TOKEN = "6320148381:AAH-_OKdwtZNKky9NXEx0zoWezcuEIoSEo8"
+BOT_TOKEN = "6320148381:AAH-_OKdwtZNKky9NXEx0zoWezcuEIoSEo8"  # <-- thay bằng token bot
 
-rules_dict = {
-    3: "Xỉu", 4: "68% Xỉu", 5: "Xỉu", 6: "Nghỉ",
-    7: {"exact": ["124", "223", "133"], "result": "Xỉu", "default": "Tài"},
-    8: {"exact": ["134"], "result": "Xỉu", "default": "Tài"},
-    9: {"exact": ["234"], "result": "Xỉu", "default": "Tài (50/50)"},
-    10: "Xỉu (auto)", 11: "Nghỉ",
-    12: {"exact": ["246", "156", "336", "255"], "result": "Xỉu", "default": "Tài"},
-    13: {"exact": ["553", "661", "531", "631"], "result": "Xỉu", "default": "Tài"},
-    14: "50/50", 15: "Tài", 16: "Xỉu", 17: "Cẩn thận", 18: "Tài"
-}
+logging.basicConfig(level=logging.INFO)
 
-logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
+history = []  # Lưu lịch sử Tài/Xỉu
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "🎲 Bot SunWin Dự Đoán Tài Xỉu\n"
-        "👉 /login <username> <password>\n"
-        "👉 /predict <phiên1> <phiên2>..."
+        "🎲 SunWin Bot\n"
+        "/login <user> <pass> – đăng nhập\n"
+        "/predict <3 4 5> – dự đoán\n"
+        "/addresult <T/X> – lưu lịch sử\n"
+        "/pattern – xem cầu hiện tại"
     )
 
 async def login(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if len(context.args) != 2:
-        await update.message.reply_text("⚠️ Dùng: /login <username> <password>")
+        await update.message.reply_text("Dùng: /login <user> <pass>")
         return
-    username, password = context.args
-    if username == "baohuy1109" and password == "036320":
-        await update.message.reply_text("✅ Đăng nhập thành công!")
+    user, pwd = context.args
+    result = login_to_sunwin(user, pwd)
+    if result.get("success"):
+        await update.message.reply_text("✅ Đăng nhập thành công!\nToken: " + result["token"][:30] + "...")
     else:
-        await update.message.reply_text("❌ Sai tài khoản!")
+        await update.message.reply_text("❌ Đăng nhập thất bại!\n" + result.get("message", ""))
 
 async def predict(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    try:
-        session_numbers = [int(num) for num in context.args]
-    except:
-        await update.message.reply_text("⚠️ Sai cú pháp. Ví dụ: /predict 3 4 5")
+    if not context.args:
+        await update.message.reply_text("Gõ: /predict <3 4 5>")
         return
-    result = predict_outcome(session_numbers)
-    await update.message.reply_text(f"🔮 Dự đoán: {result}")
+    try:
+        numbers = list(map(int, context.args))
+        msg = predict_outcome(numbers)
+        await update.message.reply_text(f"🔮 Phiên {numbers[-1]} → {msg}")
+    except:
+        await update.message.reply_text("⚠️ Nhập sai định dạng.")
 
-def predict_outcome(session_numbers):
-    last = session_numbers[-1]
-    rule = rules_dict.get(last)
-    if isinstance(rule, str):
-        if "Xỉu" in rule:
-            return "Xỉu ✅"
-        elif "Tài" in rule:
-            return "Tài ✅"
-        elif "50/50" in rule:
-            return random.choice(["Tài", "Xỉu"])
-        else:
-            return "⚠️ Nên nghỉ tay"
-    elif isinstance(rule, dict):
-        seq = "".join(str(x) for x in session_numbers[-3:])
-        return rule["result"] if seq in rule["exact"] else rule["default"]
-    return random.choice(["Tài", "Xỉu"]) + " (random)"
+async def add_result(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    global history
+    if not context.args or context.args[0].upper() not in ["T", "X"]:
+        await update.message.reply_text("Gõ: /addresult <T hoặc X>")
+        return
+    result = context.args[0].upper()
+    history.append(result)
+    await update.message.reply_text(f"✅ Đã thêm kết quả: {result}. Tổng: {len(history)}")
+
+async def pattern(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    result = detect_pattern(history)
+    if result:
+        await update.message.reply_text(f"📊 Phát hiện: {result['description']}\n💡 Gợi ý: {result['advice']}")
+    else:
+        await update.message.reply_text("🤖 Không nhận diện được cầu nào từ lịch sử.")
 
 def main():
     keep_alive()
@@ -67,7 +67,8 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("login", login))
     app.add_handler(CommandHandler("predict", predict))
-    print("🤖 Bot đã sẵn sàng!")
+    app.add_handler(CommandHandler("addresult", add_result))
+    app.add_handler(CommandHandler("pattern", pattern))
     app.run_polling()
 
 if __name__ == "__main__":

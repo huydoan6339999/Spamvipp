@@ -26,7 +26,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     try:
         url = f"https://scromnyi-ai.vercel.app/chat?message={requests.utils.quote(user_message)}"
-        response = requests.get(url, timeout=5)
+        response = requests.get(url, timeout=15)
 
         if response.status_code == 200:
             try:

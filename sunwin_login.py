@@ -7,8 +7,8 @@ def login_to_sunwin(username, password):
         "Content-Type": "application/json"
     }
     data = {
-        "username": username,
-        "password": password
+        "username": baohuy1109,
+        "password": 036320
     }
     try:
         res = requests.post(url, headers=headers, json=data)

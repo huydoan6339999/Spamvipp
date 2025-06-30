@@ -71,7 +71,7 @@ def increment_user_request(user_id):
 
 # Xoá tin nhắn sau 10 giây
 async def auto_delete(context, chat_id, *message_ids):
-    await asyncio.sleep(10)
+    await asyncio.sleep(49)
     for msg_id in message_ids:
         try:
             await context.bot.delete_message(chat_id=chat_id, message_id=msg_id)
